@@ -18,7 +18,7 @@ class Info {
 public:
 	Info info() {}
 	static unsigned char ipmi_address;
-	static unsigned char serial_number[8];
+	static char serial_number[8];
 	static Sensors::sensor_calibration_t calibration;
 
 	const unsigned char fw_major = 0x01;
