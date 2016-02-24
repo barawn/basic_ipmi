@@ -7,6 +7,11 @@
 #include "msp430_uart_defs.h"
 #include "strprintf.h"
 
+UI::UI_state_t UI::state = UI::ui_NO_TERMINAL;
+UI::vt100_state_t UI::vt100_state = vt100_STATE_IDLE;
+unsigned int UI::next_probe = 0;
+bool UI::echo_seen = false;
+
 const char UI::prompt[] = "TISC> ";
 const char UI::init[] = "\x1B[H\x1B[40m\x1B[J\x1B[46m\x1B[K\x1B[38CLog\x1B[12H\x1B[K\x1B[35CCommands\x1B[24H\x1B[K\x1B[40m\x1B[13;23r\x1B[23H";
 const char UI::probe[] = "\x1B[0c";
@@ -30,7 +35,7 @@ unsigned char UI::cmd_wr;
 unsigned char UI::cmd_rd;
 unsigned char UI::rx_wr;
 unsigned char UI::rx_rd;
-
+unsigned char UI::line_wr;
 UI ui;
 
 void UI::initialize() {
@@ -50,6 +55,7 @@ void UI::initialize() {
     cmd_wr = 0;
     rx_wr = 0;
     rx_rd = 0;
+    line_wr = 0;
     echo_seen = false;
 	// Enable interrupts.
 	UCA0IE |= UCRXIE;
@@ -301,10 +307,29 @@ void UI::logprintln(const char *format, ...) {
 void UI::println(const char *format, ...) {
 	va_list a;
 	va_start(a, format);
-	unsigned int len;
-	len = vstrprintf(log_line_buffer, 0, 0xFF, format, a);
+	line_wr = vstrprintf(log_line_buffer, line_wr, 0xFF, format, a);
 	va_end(a);
-	UART_STRNPUT(log_line_buffer, len);
+	UART_STRNPUT(log_line_buffer, line_wr);
+	line_wr = 0;
+}
+// Partial-print to the output buffer.
+void UI::print(const char *format, ...) {
+	va_list a;
+	va_start(a, format);
+	line_wr = vstrprintf(log_line_buffer, line_wr, 0xFF, format, a);
+	va_end(a);
+}
+void UI::strput(const char *str) {
+	while (*str) {
+		log_line_buffer[line_wr++] = *str++;
+	}
+}
+
+void UI::strnput(const char *str, unsigned char n) {
+	while (n) {
+		log_line_buffer[line_wr++] = *str++;
+		n--;
+	}
 }
 
 #pragma vector=USCI_A0_VECTOR

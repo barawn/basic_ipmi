@@ -56,14 +56,17 @@ public:
 		vt100_STATE_MAX = 4
 	} vt100_state_t;
 
-	UI() : echo_seen(false), vt100_state(vt100_STATE_IDLE), state(ui_NO_TERMINAL),next_probe(0) {}
-	void initialize();
-	void process();
-	void logputln(const char *str);
-	void logprintln(const char *format, ...);
-	void println(const char *format, ...);
-	bool echo_seen;
+	UI() {}
+	static void initialize();
+	static void process();
+	static void logputln(const char *str);
+	static void logprintln(const char *format, ...);
+	static void println(const char *format, ...);
+	static void print(const char *format, ...);
+	static void strput(const char *s);
+	static void strnput(const char *s, unsigned char n);
 
+	static bool echo_seen;
 	// Hardware receive buffer. Stored when system is doing something else. Commands are max 64 chars,
 	// so this is fine. Any automated interaction should be working via 'expect'.
 	static char rx_buffer[64];
@@ -82,10 +85,12 @@ public:
 	// Pointers for command echoing.
 	static unsigned char cmd_rd;
 	static unsigned char cmd_wr;
+	// Pointer for transmit buffer.
+	static unsigned char line_wr;
 private:
-	UI_state_t state;
-	vt100_state_t vt100_state;
-	unsigned int next_probe;
+	static UI_state_t state;
+	static vt100_state_t vt100_state;
+	static unsigned int next_probe;
 	const unsigned char log_min_free = 81;
 	const unsigned char log_max_used = 174;
 	const unsigned char transmit_max = 82;
@@ -102,25 +107,25 @@ private:
 	static const char newline[];
 	static const char unknown_command[];
 
-	bool vt100_parse(char c);
+	static bool vt100_parse(char c);
 
-	unsigned char uart_available() {
+	static unsigned char uart_available() {
 		unsigned char tmp;
 		tmp = (unsigned char) (rx_wr - rx_rd);
 		tmp = tmp % 64;
 		return tmp;
 	}
-	bool log_empty() {
+	static bool log_empty() {
 		return (log_wr == log_rd);
 	}
-	unsigned char log_used() {
+	static unsigned char log_used() {
 		// FIXME make this conform to the log size
 		// if log_wr-log_rd, we can write 254 characters, right? cuz we can't add a character
 		// when log_wr = 255.
 		// if log_wr = 1, and log_rd = 0, we can write 253 characters.
 		return (log_wr - log_rd);
 	}
-	void log_free() {
+	static void log_free() {
 		while (log_used() > log_max_used) {
 			while (log_buffer[log_rd] != 0x0 && (log_rd != log_wr))
 				// FIXME make this conform to the log size

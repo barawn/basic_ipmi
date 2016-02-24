@@ -13,7 +13,7 @@ public:
 	Clock() {}
 	static unsigned int ticks;
 	const unsigned int ticks_per_second = 30;
-	void initialize();
+	static void initialize();
 };
 
 extern Clock clock;
