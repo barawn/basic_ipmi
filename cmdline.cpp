@@ -12,6 +12,7 @@ const char CmdLine::table[CmdLine::COMMAND_MAX/2-1][CmdLine::length+1] = {
 		"versi",
 		"calib",
 		"set  ",
+		"info ",
 };
 
 const CmdLine::set_argument_t CmdLine::settables[CmdLine::SET_MAX/2] = {
@@ -21,7 +22,7 @@ const CmdLine::set_argument_t CmdLine::settables[CmdLine::SET_MAX/2] = {
 
 const char CmdLine::unknown_command_string[] = "Unknown command!\n\r";
 const char CmdLine::ver_string[] = "Version: testing\n\r";
-const char CmdLine::help_string[] = "Commands: help, version, calibrate\n\r";
+const char CmdLine::help_string[] = "Commands: help, version, calibrate, set, info\n\r";
 const char CmdLine::unknown_settable_string[] = "Set arguments: address, serial\n\r";
 
 void CmdLine::interpret() {
@@ -63,6 +64,8 @@ bool CmdLine::handle() {
 		return handle_calibrate();
 	case COMMAND_SET:
 		return handle_set();
+	case COMMAND_INFO:
+		return handle_info();
 	// Sleaze.
 	case COMMAND_MAX:
 		if (UART_BUSY()) return false;
@@ -72,8 +75,32 @@ bool CmdLine::handle() {
 	}
 }
 
+bool CmdLine::handle_info() {
+	static unsigned int state = 0;
+	if (UART_BUSY()) return false;
+
+	switch(__even_in_range(state, 6)) {
+	case 0: UART_STRPUT("Device Information:\n\r");
+			state = 2;
+			return false;
+	case 2: ui.strput("Serial Number: ");
+			ui.strnput(info.serial_number, 8);
+			ui.println("\n\r");
+			state = 4;
+			return false;
+	case 4: ui.println("IPMI Address: %X\n\r", info.ipmi_address);
+			state = 6;
+			return false;
+	case 6: ui.println("Firmware: %u.%u\n\r", info.fw_major, info.fw_minor);
+			state = 0;
+			command = COMMAND_NONE;
+			return false;
+	}
+}
+
 bool CmdLine::handle_set() {
 	unsigned int idx;
+	unsigned int swval;
 	unsigned int i;
 	char *arg;
 	char *val;
@@ -95,7 +122,7 @@ bool CmdLine::handle_set() {
 				while (*p != ' ' && *p != 0x0) p++;
 				if (*p == 0x0) {
 					// Buffer ended before value.
-					idx = SET_MAX;
+					idx = SET_MAX/2;
 					break;
 				}
 				// Terminate the argument.
@@ -106,11 +133,12 @@ bool CmdLine::handle_set() {
 		}
 	}
 handle_set_switch:
-	switch(__even_in_range(idx, SET_MAX)) {
+	swval = idx << 1;
+	switch(__even_in_range(swval, SET_MAX)) {
 	// All settable 8 bit objects go here.
 	case SET_ADDRESS:
 		if (!isxdigit(val[0]) || !isxdigit(val[1])) {
-			idx = SET_MAX;
+			idx = SET_MAX/2;
 			goto handle_set_switch;
 		} else {
 			unsigned char tmpval;
@@ -128,19 +156,21 @@ handle_set_switch:
 			return false;
 		}
 	case SET_SERIAL:
-		for (unsigned int i;i<8;i++) {
+		for (unsigned int i=0;i<8;i++) {
 			if (val[i] == 0x0) {
-				idx = SET_MAX;
+				idx = SET_MAX/2;
 				goto handle_set_switch;
 			}
 		}
 		info.unlock();
 		p = (char *) settables[idx].address;
-		for (unsigned int i;i<8;i++) {
+		for (unsigned int i=0;i<8;i++) {
 			p[i] = val[i];
 		}
 		info.lock();
-		ui.println("Set %s [%u] to %s\n\r", arg, idx, settables[idx].address);
+		ui.print("Set %s [%u] to ", arg, idx);
+		ui.strnput((char *) settables[idx].address, 8);
+		ui.println("\n\r");
 		command = COMMAND_NONE;
 		return false;
 	case SET_MAX:

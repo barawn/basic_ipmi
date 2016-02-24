@@ -21,7 +21,8 @@ private:
 		COMMAND_VERSION = 4,		//< Print out firmware version string
 		COMMAND_CALIBRATE = 6,		//< Run the sensor calibration.
 		COMMAND_SET = 8,
-		COMMAND_MAX = 10
+		COMMAND_INFO = 10,
+		COMMAND_MAX = 12
 	} command_t;
 
 	typedef enum enum_argument {
@@ -34,6 +35,8 @@ private:
 	bool handle_version();
 	bool handle_calibrate();
 	bool handle_set();
+	bool handle_info();
+
 	static const char unknown_command_string[];
 	static const char help_string[];
 	static const char ver_string[];
