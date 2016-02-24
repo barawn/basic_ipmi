@@ -153,7 +153,9 @@ void Sensors::initialize() {
 	ADC12MCTL1 = ADC12VRSEL_1 | ADC12INCH_31 | ADC12EOS;
 	// Set up our reference.
 	while (REFCTL0 & REFGENBUSY);
-	REFCTL0 = REFON | REFVSEL_1;
+	// Don't need to enable the reference. It gets enabled automatically during ADC
+	// conversion.
+	REFCTL0 = REFVSEL_1;
 	ADC12IER0 |= ADC12IE1;
 	ADC12CTL0 |= ADC12ENC | ADC12SC;
 }
