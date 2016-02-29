@@ -2,9 +2,7 @@
 #include "ui.h"
 #include "cmdline.h"
 #include "clock.h"
-
-#define UART0_8N1_38400_SMCLK_1MHZ
-#include "msp430_uart_defs.h"
+#include "platform.h"
 #include "strprintf.h"
 
 UI::UI_state_t UI::state = UI::ui_NO_TERMINAL;
