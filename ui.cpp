@@ -114,14 +114,14 @@ UI_begin_process:
 		// Probe.
 		cur_tick = clock.ticks;
 		if (cur_tick > next_probe) {
-			if (!echo_seen) {
-				// Since we only get to IDLE when echo_seen is set once, this means we sent out a new echo,
-				// and never got a response. Switch to ui_NO_TERMINAL.
-				ui.logprintln("UI> lost term at %u", clock.ticks);
-				state = ui_NO_TERMINAL;
-				goto UI_begin_process;
-			}
 			if (cur_tick - next_probe < 0x8000) {
+				if (!echo_seen) {
+					// Since we only get to IDLE when echo_seen is set once, this means we sent out a new echo,
+					// and never got a response. Switch to ui_NO_TERMINAL.
+					ui.logprintln("UI> lost term at %u", clock.ticks);
+					state = ui_NO_TERMINAL;
+					goto UI_begin_process;
+				}
 				if (UART_BUSY()) return;
 				echo_seen = false;
 				UART_STRPUT(probe);
