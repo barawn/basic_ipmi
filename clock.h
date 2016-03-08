@@ -11,9 +11,18 @@
 class Clock {
 public:
 	Clock() {}
-	static unsigned int ticks;
+	//< Current time.
+	static volatile unsigned int ticks;
+	//< How many ticks there are in a second.
 	const unsigned int ticks_per_second = 30;
+	//< Initialize the clock.
 	static void initialize();
+	//< Use to determine how much time has passed.
+	static inline bool time_has_passed(unsigned int target) {
+		unsigned int cur_time;
+		cur_time = ticks;
+		return ((int) (cur_time - target) > 0);
+	}
 };
 
 extern Clock clock;

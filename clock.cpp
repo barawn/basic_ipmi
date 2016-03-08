@@ -3,7 +3,7 @@
 
 Clock clock;
 
-unsigned int Clock::ticks = 0;
+volatile unsigned int Clock::ticks = 0;
 
 void Clock::initialize() {
 	// Set up the watchdog timer, and set it running.
