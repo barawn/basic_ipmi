@@ -4,6 +4,62 @@
 #include "ui.h"
 #include "clock.h"
 #include "info.h"
+#include "adc.h"
+
+// I2C Sensor Objects:
+// 1: LTC4222 at 0x4F.
+//    Status at 0xD2
+//    Status at 0xD6
+//    Source1 at 0xD8/0xD9
+//    Source2 at 0xDA/0xDB
+//    ADIN1 at 0xDC/0xDD
+//    ADIN2 at 0xDE/0xDF
+//    Sense1 at 0xE0/0xE1
+//    Sense2 at 0xE2/0xE3
+// 2: EMC1412 at 0x4C.
+//    Temp1 at 0x00/0x29
+//    Temp2 at 0x01/0x10
+
+///// WORK IN PROGRESS
+
+typedef struct i2c_register {
+	unsigned int address;
+	unsigned int reg;
+} i2c_register_t;
+
+i2c_register_t i2c_sequence[] = {
+		{ .address = 0x4F, .reg = 0xD2 },
+		{ .address = 0x4F, .reg = 0xD6 },
+		{ .address = 0x4F, .reg = 0xD8 },
+		{ .address = 0x4F, .reg = 0xD9 },
+		{ .address = 0x4F, .reg = 0xDA },
+		{ .address = 0x4F, .reg = 0xDB },
+		{ .address = 0x4F, .reg = 0xDC },
+		{ .address = 0x4F, .reg = 0xDD },
+		{ .address = 0x4F, .reg = 0xDE },
+		{ .address = 0x4F, .reg = 0xDF },
+		{ .address = 0x4F, .reg = 0xE0 },
+		{ .address = 0x4F, .reg = 0xE1 },
+		{ .address = 0x4F, .reg = 0xE2 },
+		{ .address = 0x4F, .reg = 0xE3 },
+		{ .address = 0x4C, .reg = 0x00 },
+		{ .address = 0x4C, .reg = 0x10 },
+		{ .address = 0x4C, .reg = 0x01 },
+		{ .address = 0x4C, .reg = 0x29 }
+};
+
+unsigned char i2c_sequence_buffer[sizeof(i2c_sequence)/sizeof(i2c_register_t)];
+#pragma NOINIT
+unsigned char i2c_sequence_count;
+
+//// END WORK IN PROGRESS
+
+// Overview of the sensor state machine:
+// 1: Write
+//
+// 1: When ADC conversion complete, read out raw values and calibrate.
+//    Begin
+
 
 Sensors sensors;
 
@@ -16,26 +72,10 @@ int Sensors::cal_values[Sensors::MAX_SENSORS] = { 0 , 0 };
 #pragma NOINIT
 unsigned int Sensors::tick_wait;
 
-typedef struct adc12_cal {
-	unsigned char tag;
-	unsigned char len;
-	unsigned int gain;
-	unsigned int offset;
-	unsigned int temp30_1v2;
-	unsigned int temp85_1v2;
-	unsigned int temp30_2v0;
-	unsigned int temp85_2v0;
-	unsigned int temp30_2v5;
-	unsigned int temp85_2v5;
-} adc12_cal_t;
-
-typedef struct ref_cal {
-	unsigned char tag;
-	unsigned char len;
-	unsigned int ref_1v2;
-	unsigned int ref_2v0;
-	unsigned int ref_2v5;
-} ref_cal_t;
+const char *Sensors::sensor_names[Sensors::MAX_SENSORS] = {
+		"MSP TEMP",
+		"MSP VOLT"
+};
 
 // Calibration:
 // 1855 - 1579 = 276 counts per 55 degrees
@@ -62,21 +102,15 @@ unsigned int minus25_offset;
 // Then if we get 3699, we would multiply by 61864, and divide by 2^16.
 // This leaves 3491, or 3.491 mV.
 
-unsigned char *tag_find(unsigned char tag) {
-	unsigned char *p;
-	p = (unsigned char *) TLV_START;
-	while (*p != tag) {
-		unsigned char len;
-		p++;
-		len = *p++;
-		p += len;
-	}
-	return p;
-}
-
+/** \brief Sensor calibration.
+ *
+ * Sensor calibration consists of reading in the ADC calibrations
+ * and computing a value that can be used to convert the sensors
+ * into physical units. Hardware multiplication can help, but we
+ * have to deal with divides ourselves.
+ *
+ */
 void Sensors::calibrate() {
-	adc12_cal_t *adccal;
-	ref_cal_t *refcal;
 	unsigned int delta;
 	unsigned int tmp;
 	unsigned int centidegrees_per_count;
@@ -85,9 +119,12 @@ void Sensors::calibrate() {
 	// Calibration is in info segment.
 	info.unlock();
 
-	adccal = (adc12_cal_t *) tag_find(TLV_ADC12CAL);
-	delta = adccal->temp85_2v0;
-	delta -= adccal->temp30_2v0;
+	// Find the difference between 85C and 30C in ADC counts.
+	delta = adc.adc_calib->temp85_2v0;
+	delta -= adc.adc_calib->temp30_2v0;
+	// Now divide 5500 centidegrees by that value.
+	// The loop is just long division: how many 'deltas'
+	// fit into 5500.
 	centidegrees_per_count = 0;
 	tmp = 55*100;
 	while (tmp > delta) {
@@ -102,9 +139,7 @@ void Sensors::calibrate() {
 
 	// These are in info segment.
 	info.calibration.uc_temp_m = centidegrees_per_count;
-	info.calibration.uc_temp_b = adccal->temp30_2v0;
-	refcal = (ref_cal_t *) tag_find(TLV_REFCAL);
-
+	info.calibration.uc_temp_b = adc.adc_calib->temp30_2v0;
 	// Find millivolts/count.
 	// ref_2v0 is (vref/2.0)*2^15. Nominal conversion is (2000/2^12).
 	// So multiplying them together gets (mV/count)*2^27.
@@ -112,7 +147,7 @@ void Sensors::calibrate() {
 	// Then take raw * l >> 2^16, which gives you the proper value
 	// since the voltage is divided by 2.
 	// I should also probably add offset correction here.
-	l = ((unsigned long)refcal->ref_2v0) * 2000;
+	l = ((unsigned long)adc.ref_calib->ref_2v0) * 2000;
 	l >>= 10;
 	// l's range should be restricted to 16 bits here.
 	// It was restricted to 15 bits, then multiplied by an 11
@@ -127,48 +162,26 @@ void Sensors::calibrate() {
 	info.lock();
 }
 
+/** \brief Sensor initialization.
+ *
+ */
 void Sensors::initialize() {
-	// Lots of initializing to do.
-	// Our channels are:
-	// A13
-	// A14
-	// A15
-	// A30
-	// A31
-	// Mux ON resistance is 4k max, capacitance is 15 pF.
-	// (4k * 9.7 * 15 pF) = ~500 ns.
-	// MODOSC is up to 5.4 MHz max. 4 ADC12CLK cycles is still fast enough for the rails.
-	// A13/A14/A15 are set up for 4 ADC12CLK cycles.
-	// The temperature sensor needs 30 us, so that's what we set up for.
-	// ADC12CLK is SMCLK, so we select 192 ADC12CLK cycles.
-
-	// Just work with A30/A31 for now.
-
-	// ADC INITIALIZATION
-	ADC12CTL0 = ADC12ON | ADC12SHT1_0 | ADC12SHT0_7 | ADC12MSC;
-	ADC12CTL1 = ADC12CONSEQ_1 | ADC12SHP;
-	ADC12CTL3 = ADC12TCMAP | ADC12BATMAP;
-	// Set up our sequence.
-	ADC12MCTL0 = ADC12VRSEL_1 | ADC12INCH_30;
-	ADC12MCTL1 = ADC12VRSEL_1 | ADC12INCH_31 | ADC12EOS;
-	// Set up our reference.
-	while (REFCTL0 & REFGENBUSY);
-	// Don't need to enable the reference. It gets enabled automatically during ADC
-	// conversion.
-	REFCTL0 = REFVSEL_1;
-	ADC12IER0 |= ADC12IE1;
-	ADC12CTL0 |= ADC12ENC | ADC12SC;
+	// ADC initialization is done in ADC::initialize()
+	adc.initialize();
+	adc.convert();
 }
 
+/** \brief Sensor processing function
+ *
+ */
 void Sensors::process() {
-	unsigned int cur_tick;
 	unsigned long tmp;
 
 	switch (__even_in_range(state, sensor_STATE_MAX)) {
 	case sensor_CONVERT_ADC:
-		if (!(ADC12IFGR0 & ADC12IFG1)) return;
-		raw_values[0] = ADC12MEM0;
-		raw_values[1] = ADC12MEM1;
+		if (!adc.complete()) return;
+		// Fill raw_values[0], raw_values[1].
+		adc.get_values(raw_values);
 		// cal_values here are calibrated to allow for easy IPMI access.
 		// The temperature sensor stays in raw counts.
 		cal_values[0] = raw_values[0] - info.calibration.uc_temp_b;
@@ -176,28 +189,17 @@ void Sensors::process() {
 		tmp = raw_values[1] - info.calibration.uc_volt_b;
 		tmp = raw_values[1] * ((unsigned long) info.calibration.uc_volt_m);
 		cal_values[1] = tmp >> 16;
-		ADC12IER0 |= ADC12IE1;
 
-		state = sensor_FINISH;
 		tick_wait = clock.ticks + 5*clock.ticks_per_second;
+		state = sensor_FINISH;
 		return;
 	case sensor_FINISH:
-		cur_tick = clock.ticks;
-		if (cur_tick > tick_wait) {
-			if (cur_tick - tick_wait < 0x8000) {
-				ADC12CTL0 |= ADC12SC;
-				state = sensor_CONVERT_ADC;
-			}
+		if (clock.time_has_passed(tick_wait)) {
+			adc.convert();
+			state = sensor_CONVERT_ADC;
 		}
 		return;
 	default:
 		__never_executed();
 	}
-}
-
-#pragma vector=ADC12_VECTOR
-__interrupt void ADC12_Handler() {
-	ADC12IER0 = 0;
-	asm("	mov.b	#0x00, r4");
-	__bic_SR_register_on_exit(LPM0_bits);
 }

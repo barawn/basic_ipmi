@@ -2,9 +2,7 @@
 #include "ui.h"
 #include "cmdline.h"
 #include "clock.h"
-
-#define UART0_8N1_38400_SMCLK_1MHZ
-#include "msp430_uart_defs.h"
+#include "platform.h"
 #include "strprintf.h"
 
 UI::UI_state_t UI::state = UI::ui_NO_TERMINAL;
@@ -15,8 +13,8 @@ bool UI::echo_seen = false;
 const char UI::prompt[] = "TISC> ";
 const char UI::init[] = "\x1B[H\x1B[40m\x1B[J\x1B[46m\x1B[K\x1B[38CLog\x1B[12H\x1B[K\x1B[35CCommands\x1B[24H\x1B[K\x1B[40m\x1B[13;23r\x1B[23H";
 const char UI::probe[] = "\x1B[0c";
-const char UI::statusbar_begin[] = "\x1B7\x1B[24H\x1B[46m";
-const char UI::statusbar_end[] = "\x1B[40m\x1B8";
+const char UI::statusbar_begin[] = "\x1B[s\x1B[24H\x1B[46m";
+const char UI::statusbar_end[] = "\x1B[40m\x1B[u";
 const char UI::log_begin[] = "\x1B[s\x1B[2;11r\x1B[11H";
 const char UI::log_end[] = "\x1B[13;23r\x1B[u";
 const char UI::backspace[] = "\x08 \x08";
@@ -40,13 +38,12 @@ UI ui;
 
 void UI::initialize() {
 	// Let's set up the UART.
-	msp430_eusci_uart0_init();
-	P2SEL1 |= BIT0 | BIT1;
+	platform_ui_uart_init();
     // Set up transmitter in DMA ch#0.
-    // Trigger # is 15. Block transfer mode. Level sensitive. Destination doesn't increment.
+    // Trigger # is in platform.h. Block transfer mode. Level sensitive. Destination doesn't increment.
     // Source does increment. Bytes on both source and destination.
-	DMACTL0 = (DMACTL0 & 0xFF00) | 15;
-    DMA0DA = (__SFR_FARPTR) (unsigned long) &UCA0TXBUF;
+	DMACTL0 = (DMACTL0 & 0xFF00) | UI_UART_DMA_TX_TRIGGER;
+    DMA0DA = (__SFR_FARPTR) (unsigned long) &UI_UART_TXBUF;
     // Add DMAIE later.
     DMA0CTL = DMADSTINCR_0 | DMASRCINCR_3 | DMADT_0 | DMALEVEL | DMADSTBYTE | DMASRCBYTE; // | DMAIE;
     log_rd = 0;
@@ -58,25 +55,21 @@ void UI::initialize() {
     line_wr = 0;
     echo_seen = false;
 	// Enable interrupts.
-	UCA0IE |= UCRXIE;
+    platform_ui_uart_interrupt_enable();
 	DMA0CTL |= DMAIE;
 }
 
 void UI::process() {
 	unsigned char nbytes;
-	unsigned int cur_tick;
 
 UI_begin_process:
 	switch(__even_in_range(state, 34)) {
 	case ui_NO_TERMINAL:
 		// Probe periodically.
-		cur_tick = clock.ticks;
-		if (cur_tick > next_probe) {
-			if (cur_tick - next_probe < 0x8000) {
-				if (UART_BUSY()) return;
-				UART_STRPUT(probe);
-				next_probe = next_probe + probe_period*clock.ticks_per_second;
-			}
+		if (clock.time_has_passed(next_probe)) {
+			if (UART_BUSY()) return;
+			UART_STRPUT(probe);
+			next_probe = next_probe + probe_period*clock.ticks_per_second;
 		}
 		if (!echo_seen) {
 			nbytes = uart_available();
@@ -114,8 +107,7 @@ UI_begin_process:
 		state = ui_IDLE;
 	case ui_IDLE:
 		// Probe.
-		cur_tick = clock.ticks;
-		if (cur_tick > next_probe) {
+		if (clock.time_has_passed(next_probe)) {
 			if (!echo_seen) {
 				// Since we only get to IDLE when echo_seen is set once, this means we sent out a new echo,
 				// and never got a response. Switch to ui_NO_TERMINAL.
@@ -123,12 +115,10 @@ UI_begin_process:
 				state = ui_NO_TERMINAL;
 				goto UI_begin_process;
 			}
-			if (cur_tick - next_probe < 0x8000) {
-				if (UART_BUSY()) return;
-				echo_seen = false;
-				UART_STRPUT(probe);
-				next_probe = next_probe + probe_period*clock.ticks_per_second;
-			}
+			if (UART_BUSY()) return;
+			echo_seen = false;
+			UART_STRPUT(probe);
+			next_probe = next_probe + probe_period*clock.ticks_per_second;
 		}
 		// Do we have characters to process?
 		nbytes = uart_available();
@@ -281,6 +271,8 @@ bool UI::vt100_parse(char c) {
 		echo_seen = true;
 		vt100_state = vt100_STATE_IDLE;
 		return true;
+	default:
+		__never_executed();
 	}
 }
 
@@ -332,13 +324,13 @@ void UI::strnput(const char *str, unsigned char n) {
 	}
 }
 
-#pragma vector=USCI_A0_VECTOR
+#pragma vector=UI_UART_VECTOR
 __interrupt void
-EUSCI_A0_Interrupt_Handler() {
-	switch ( __even_in_range(UCA0IV, 8)) {
+EUSCI_UI_Interrupt_Handler() {
+	switch ( __even_in_range(UI_UART_IV, 8)) {
 	case 0x00: break;
 	case 0x02: // UCRXIFG
-		UI::rx_buffer[UI::rx_wr] = UCA0RXBUF;
+		UI::rx_buffer[UI::rx_wr] = UI_UART_RXBUF;
 		UI::rx_wr++;
 		UI::rx_wr = UI::rx_wr % 64;
 		asm("	mov.b	#0x00, r4");
@@ -361,7 +353,7 @@ __interrupt void DMA_Handler() {
 	case 0x00: return;
 	case 0x02: asm("	MOV.B #0x00, r4"); __bic_SR_register_on_exit(LPM0_bits); return;
 	case 0x04: return;
-	case 0x06: return;
+	case 0x06: asm("    MOV.B #0x00, r4"); __bic_SR_register_on_exit(LPM0_bits); return;
 	case 0x08: return;
 	case 0x0A: return;
 	case 0x0C: return;

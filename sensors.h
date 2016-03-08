@@ -27,7 +27,7 @@ public:
 	typedef enum sensor_state {
 		sensor_CONVERT_ADC = 0,
 		sensor_FINISH = 2,
-		sensor_STATE_MAX = 2
+		sensor_STATE_MAX = sensor_FINISH
 	} sensor_state_t;
 
 	typedef struct sensor_calibration {
@@ -38,7 +38,7 @@ public:
 	} sensor_calibration_t;
 
 	const unsigned int MAX_SENSORS = 2;
-
+	static const char *sensor_names[MAX_SENSORS];
 	static unsigned int raw_values[MAX_SENSORS];
 	static int cal_values[MAX_SENSORS];
 	static unsigned int tick_wait;
