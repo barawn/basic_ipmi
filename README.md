@@ -109,3 +109,54 @@ To add a new sensor to the firmware,
    
 Keep in mind sensor readings are only 8 bits.
    
+   
+# Programming Style Notes
+
+## State machines
+
+There are a *lot* of 'state machines' in this code. A state machine is like a flowchart:
+the state tells you what you're doing, the state machine tells you where to go next.
+
+State machines, as implemented here, look like:
+
+enum state {
+	state_0 = 0,
+	state_1 = 2,
+	state_2 = 4,
+	state_3 = 6,
+};
+
+enum state cur_state = state_0;
+
+switch (__even_in_range(cur_state, state_3)) {
+   case state_0: ...
+   case state_1: ...
+   case state_2: ...
+   default: __never_executed();
+}
+
+There are a few things to notice here.
+
+  * The 'enum' specifies all of the states that can be reached.
+  * States are all defined to be even (this is an MSP430 thing), and sequential.
+  * The state machine is a switch() statement. All cases are covered in the switch statement.
+  * There is a "_never_executed()" for the case (this is an MSP430 thing).
+
+### MSP430 Specific State Machine Notes
+
+A 'switch' statement in C would normally be converted (in its simplest form) into a bunch
+of comparisons. That is, it would become
+
+if (cur_state == state_0) { ... }
+else if (cur_state == state_1) { ... }
+else if (cur_state == state_2) { ... }
+
+etc. This is *very* slow once the number of states gets large. An alternative is to create
+something called a "jump table," which is just an ordered list of each of the cases of the
+switch statement. In this case, you don't need to do compares - you just skip exactly to
+the point you want.
+
+The MSP430 compiler isn't very smart, and so to create a jump table, it requires certain
+conditions: it wants the thing you're switching to be even (because the jump table instruction
+is 2 bytes long), and it wants all cases to be covered.
+	
