@@ -60,6 +60,7 @@ to complete and returns true.
 
 So for instance, if you need to write multiple lines, it would be:
 
+```c++
 bool handle_help() {
 	static unsigned state = STATE_BEGIN;
 	switch(__even_in_range(state, 4)) {
@@ -78,6 +79,7 @@ bool handle_help() {
 			return false;
 	}
 }
+```
 
 # Adding new sensors
 
@@ -119,6 +121,7 @@ the state tells you what you're doing, the state machine tells you where to go n
 
 State machines, as implemented here, look like:
 
+```c++
 enum state {
 	state_0 = 0,
 	state_1 = 2,
@@ -134,6 +137,7 @@ switch (__even_in_range(cur_state, state_3)) {
    case state_2: ...
    default: __never_executed();
 }
+```
 
 There are a few things to notice here.
 
@@ -146,11 +150,11 @@ There are a few things to notice here.
 
 A 'switch' statement in C would normally be converted (in its simplest form) into a bunch
 of comparisons. That is, it would become
-
+```c++
 if (cur_state == state_0) { ... }
 else if (cur_state == state_1) { ... }
 else if (cur_state == state_2) { ... }
-
+```
 etc. This is *very* slow once the number of states gets large. An alternative is to create
 something called a "jump table," which is just an ordered list of each of the cases of the
 switch statement. In this case, you don't need to do compares - you just skip exactly to
