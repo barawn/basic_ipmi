@@ -31,7 +31,6 @@ void CmdLine::interpret() {
 	if (buffer[0] == 0x0) return;
 	ui.logprintln("CMD> rec'd '%s'", buffer);
 	do {
-		unsigned int i;
 		unsigned int idx;
 		idx = (((unsigned int) command) >> 1) - 1;
 		if (compare(table[idx], buffer)) break;
@@ -72,6 +71,8 @@ bool CmdLine::handle() {
 		UART_STRPUT(unknown_command_string);
 		command = COMMAND_NONE;
 		return false;
+	default:
+		__never_executed();
 	}
 }
 
@@ -95,13 +96,14 @@ bool CmdLine::handle_info() {
 			state = 0;
 			command = COMMAND_NONE;
 			return false;
+	default:
+			__never_executed();
 	}
 }
 
 bool CmdLine::handle_set() {
 	unsigned int idx;
 	unsigned int swval;
-	unsigned int i;
 	char *arg;
 	char *val;
 	char *p;
@@ -177,6 +179,8 @@ handle_set_switch:
 		UART_STRPUT(unknown_settable_string);
 		command = COMMAND_NONE;
 		return false;
+	default:
+		__never_executed();
 	}
 }
 

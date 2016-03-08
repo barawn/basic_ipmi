@@ -30,7 +30,7 @@
 
 class IPMI_Device {
 public:
-	Device() {}
+	IPMI_Device() {}
 
 	static void initialize();
 

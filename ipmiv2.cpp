@@ -354,6 +354,8 @@ ipmi_TX_STARTED_process:
 		return false;
 	case ipmi_TX_TRANSMITTING:
 		return true;
+	default:
+		__never_executed();
 	}
 }
 

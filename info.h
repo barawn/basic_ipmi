@@ -16,7 +16,7 @@
 //% The Info class contains general information/parameters, including the IPMI address.
 class Info {
 public:
-	Info info() {}
+	Info() {}
 	static unsigned char ipmi_address;
 	static char serial_number[8];
 	static Sensors::sensor_calibration_t calibration;

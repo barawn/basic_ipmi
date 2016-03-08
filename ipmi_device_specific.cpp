@@ -48,7 +48,6 @@ unsigned char *IPMI_Device::copy_sdr(unsigned int sdr,
 									 unsigned char *target) {
 	ipmi_sdr_header_t *hdr;
 	const unsigned char *this_sdr;
-	unsigned char to_copy;
 	unsigned char *p;
 
 	p = target + 1;
