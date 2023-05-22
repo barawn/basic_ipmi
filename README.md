@@ -163,6 +163,14 @@ the point you want.
 The MSP430 compiler isn't very smart, and so to create a jump table, it requires certain
 conditions: it wants the thing you're switching to be even (because the jump table instruction
 is 2 bytes long), and it wants all cases to be covered.
+
+# Other Notes
+
+Last time I used this project, it did work - however, please note that **many** IPMI MC implementations
+have bugs and may not implement certain things correctly.
+
+A lot of this code is also MSP430 and CCS specific, so you may have to do some research to adapt
+to other platforms.
 	
 # Licensing and Use
 
