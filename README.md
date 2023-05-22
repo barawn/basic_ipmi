@@ -164,3 +164,10 @@ The MSP430 compiler isn't very smart, and so to create a jump table, it requires
 conditions: it wants the thing you're switching to be even (because the jump table instruction
 is 2 bytes long), and it wants all cases to be covered.
 	
+# Licensing and Use
+
+This project was created as part of the Antarctic Impulsive Transient Antenna (ANITA) research project
+by Patrick Allison (allison.122@osu.edu) at Ohio State University. This software may be freely used
+under CC-BY-SA licensing terms, including this final Licensing and Use section.
+
+https://creativecommons.org/licenses/by-sa/4.0/
